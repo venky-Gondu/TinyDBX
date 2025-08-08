@@ -1,0 +1,27 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+env/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Project data folder
+data/
+
+# Logs
+*.log
+*.wal
+
+# Environment variables
+.env
+
+# Temporary files
+tmp/
+*.tmp
