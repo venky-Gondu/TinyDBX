@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
-import os
-
+from db_core.primary_key_manager import PrimaryKeyManager
 
 class InsertManager:
     def __init__(self, db_name, table_name):
@@ -10,9 +9,11 @@ class InsertManager:
         self.base_path = Path("data") / db_name / table_name
         self.schema_path = self.base_path / "schema.json"
         self.data_path = self.base_path / "data.json"
+        self.wal_path = self.base_path / "log.wal"
+        self.pk_manager = PrimaryKeyManager(db_name, table_name)
 
     def insert_values(self, values: list):
-        if not os.path.exists(self.base_path) or not os.path.isdir(self.base_path):
+        if not self.base_path.exists() or not self.base_path.is_dir():
             return {"error": f"No Table '{self.table_name}' is present in '{self.db_name}'"}
 
         try:
@@ -32,41 +33,37 @@ class InsertManager:
             col_name = col["name"]
             col_type = col.get("type", "TEXT")
 
-            # Type validation
-            if col_type == "INT":
-                if not isinstance(val, int):
-                    return {"error": f"Column '{col_name}' expects INT but got {type(val).__name__}."}
-            elif col_type == "FLOAT":
-                if not isinstance(val, (float, int)):
-                    return {"error": f"Column '{col_name}' expects FLOAT but got {type(val).__name__}."}
-            elif col_type == "TEXT":
-                if not isinstance(val, str):
-                    return {"error": f"Column '{col_name}' expects TEXT but got {type(val).__name__}."}
-            elif col_type == "BOOL":
-                if not isinstance(val, bool):
-                    return {"error": f"Column '{col_name}' expects BOOL but got {type(val).__name__}."}
-
+            # Type validation and data assignment
+            if col_type == "INT" and not isinstance(val, int):
+                return {"error": f"Column '{col_name}' expects INT but got {type(val).__name__}."}
+            elif col_type == "FLOAT" and not isinstance(val, (float, int)):
+                return {"error": f"Column '{col_name}' expects FLOAT but got {type(val).__name__}."}
+            elif col_type == "TEXT" and not isinstance(val, str):
+                return {"error": f"Column '{col_name}' expects TEXT but got {type(val).__name__}."}
+            elif col_type == "BOOL" and not isinstance(val, bool):
+                return {"error": f"Column '{col_name}' expects BOOL but got {type(val).__name__}."}
+            
             row_data[col_name] = val
 
-        # Load existing rows
-        try:
-            with open(self.data_path, "r") as f:
-                rows = json.load(f)
-        except Exception as e:
-            return {"error": f"Error reading data.json: {e}"}
-
-        # Check primary key uniqueness
+        # Primary key validation using PrimaryKeyManager
         if primary_key:
-            for row in rows:
-                if row.get(primary_key) == row_data[primary_key]:
-                    return {"error": f"Primary key '{row_data[primary_key]}' already exists."}
+            pk_value = row_data.get(primary_key)
+            if pk_value is None:
+                return {"error": f"Primary key '{primary_key}' cannot be null."}
+            
+            if not self.pk_manager.check_pk_uniqueness(pk_value):
+                return {"error": f"Primary key violation: '{pk_value}' already exists."}
 
-        rows.append(row_data)
-
+        # Write-Ahead Logging (WAL)
         try:
-            with open(self.data_path, "w") as f:
-                json.dump(rows, f, indent=2)
+            log_entry = {"operation": "insert", "data": row_data}
+            with open(self.wal_path, "a") as f:
+                f.write(json.dumps(log_entry) + "\n")
         except Exception as e:
-            return {"error": f"Error saving new row: {e}"}
+            return {"error": f"Failed to write to WAL: {e}"}
 
-        return {"success": f"Row inserted into '{self.table_name}' successfully."}
+        # Update PK cache after successful insertion
+        if primary_key:
+            self.pk_manager.add_pk_to_cache(row_data[primary_key])
+
+        return {"success": f"Insert operation logged for table '{self.table_name}'."}

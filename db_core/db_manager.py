@@ -2,8 +2,10 @@ from pathlib import Path
 import shutil
 import os
 
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
 class DBManager:
-    def __init__(self, db_name, base_path="data"):
+    def __init__(self, db_name, base_path=DATA_DIR):
         self.db_name = db_name
         self.base_path = base_path
         self.target_path = Path(base_path) / db_name

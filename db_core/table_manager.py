@@ -17,7 +17,15 @@ class TableManager:
         if self.table_path.exists():
             return {"error": f"Table '{self.table_name}' already exists in database '{self.db_name}'."}
 
-        #  Validate schema before proceeding
+        # Validate schema and identify primary key
+        primary_key = None
+        for col in self.schema.get("columns", []):
+            if "PRIMARY" in col.get("constraints", []):
+                primary_key = col["name"]
+                break  # Assuming only one primary key
+
+        self.schema["primary_key"] = primary_key
+        
         validator = Schema_Manager(self.schema)
         validation_result = validator.validate()
         if "error" in validation_result:
@@ -42,3 +50,4 @@ class TableManager:
 
         except Exception as e:
             return {"error": f"Error while creating table '{self.table_name}': {e}"}
+    

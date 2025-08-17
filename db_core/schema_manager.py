@@ -11,7 +11,7 @@ class Schema_Manager:
 
         for column in self.schema["columns"]:
             name = column.get("name")
-            col_type = column.get("type")
+            col_type = column.get("type") 
 
             if not name or not col_type:
                 return {"error": f"Column definition missing 'name' or 'type': {column}"}
